@@ -1,0 +1,4 @@
+discord.py
+deep-translator
+translate
+franco_arabic_transliterator
