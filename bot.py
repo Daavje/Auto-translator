@@ -2,16 +2,14 @@ import discord
 from discord.ext import commands
 from deep_translator import GoogleTranslator
 import os
-import re
 import logging
+from pyarabic.araby import transcribe
 
 # ------------------------------
 # Logging
 # ------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] %(levelname)s:%(name)s: %(message)s"
-)
+logging.basicConfig(level=logging.INFO,
+                    format="[%(asctime)s] %(levelname)s:%(name)s: %(message)s")
 log = logging.getLogger("franco-arabic-bot")
 
 # ------------------------------
@@ -27,55 +25,33 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 translator = GoogleTranslator(source="auto", target="en")
 
 # ------------------------------
-# Franco-Arabic → Arabic mapping
-# ------------------------------
-FRANCO_MAP = {
-    "2": "ء",
-    "3": "ع",
-    "4": "ش",
-    "5": "خ",
-    "6": "ط",
-    "7": "ح",
-    "8": "ق",
-    "9": "ص",
-    "a": "ا", "b": "ب", "t": "ت", "th": "ث",
-    "j": "ج", "h": "ه", "kh": "خ", "d": "د",
-    "dh": "ذ", "r": "ر", "z": "ز", "s": "س",
-    "sh": "ش", "ṣ": "ص", "ḍ": "ض", "ṭ": "ط",
-    "ẓ": "ظ", "ʿ": "ع", "gh": "غ", "f": "ف",
-    "q": "ق", "k": "ك", "l": "ل", "m": "م",
-    "n": "ن", "h": "ه", "w": "و", "y": "ي",
-}
-
-def franco_to_arabic(text: str) -> str:
-    """Convert simple Franco-Arabic to Arabic letters."""
-    # order matters: check 2-char combos first (like 'sh', 'kh', 'gh')
-    for combo in ['sh','kh','gh','th','dh']:
-        if combo in FRANCO_MAP:
-            text = text.replace(combo, FRANCO_MAP[combo])
-    # replace single chars and numbers
-    for k, v in FRANCO_MAP.items():
-        text = text.replace(k, v)
-    return text
-
-# ------------------------------
 # Helper functions
 # ------------------------------
-_normalize_re = re.compile(r"[\W_]+", re.UNICODE)
-
-def normalize_text(s: str) -> str:
-    return _normalize_re.sub(" ", s).strip().lower()
-
-def should_send_translation(original: str, translated: str) -> bool:
-    return normalize_text(original) != normalize_text(translated)
+def arabizi_to_arabic(text: str) -> str:
+    """
+    Convert Franco-Arabic (Arabizi) to Arabic letters using pyarabic's transcribe.
+    This handles standard Arabizi spelling and phonetic variants.
+    """
+    try:
+        return transcribe(text)
+    except Exception as e:
+        log.warning("Arabizi to Arabic conversion failed: %s", e)
+        return text  # fallback
 
 async def translate_text(text: str) -> str:
+    """
+    Convert Franco-Arabic to Arabic, then translate to English.
+    """
     try:
-        arabic_text = franco_to_arabic(text)
-        return translator.translate(arabic_text)
+        arabic_text = arabizi_to_arabic(text)
+        translation = translator.translate(arabic_text)
+        return translation
     except Exception as e:
         log.warning("Translation failed: %s", e)
-        return text  # fallback
+        return text
+
+def should_send_translation(original: str, translated: str) -> bool:
+    return original.strip().lower() != translated.strip().lower()
 
 # ------------------------------
 # Events
@@ -113,5 +89,4 @@ async def translate_command(ctx: commands.Context, *, text: str):
 # Run bot
 # ------------------------------
 token = os.getenv("DISCORD_BOT_TOKEN", "JOUW_DISCORD_BOT_TOKEN_HIER")
-
 bot.run(token)
